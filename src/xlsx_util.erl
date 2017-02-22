@@ -77,3 +77,24 @@ take_nth_list(N, List, Value)->
 			end
 		end, 1, List),
 	NewList.
+
+str_normalize(String)->
+	New = replace(String,"_x000D_","\n"),
+	replace(New,"_x000d_","\n").
+
+token_str(String, TokenStr)->
+	Len = string:len(TokenStr),
+	case string:str(String, TokenStr) of
+		0->[String];
+		1->
+			LeftString = string:sub_string(String, Len + 1),
+			token_str(LeftString, TokenStr);
+		I->
+			FirstString = string:sub_string(String, 1, I - 1),
+			LeftString = string:sub_string(String, I + Len),
+			[FirstString | token_str(LeftString, TokenStr)]
+	end.
+
+replace(String, TokenStr, NewString)->
+	SplitStrings = token_str(String, TokenStr),
+	string:join(SplitStrings, NewString).

@@ -72,8 +72,10 @@ process_relationhips(ZipHandle) ->
 			end
 	end.
 process_sheet_table(XlsxZipHandle, RowHandler) ->
-	lists:foreach(
-		fun(SheetInfo) ->
+	lists:foldl(
+		fun (_SheetInfo,break) ->
+			break;
+			(SheetInfo,next_sheet) ->
 			SheetId = SheetInfo#xlsx_sheet.id,
 			SheetName = SheetInfo#xlsx_sheet.name,
 			Relation = get_xlsx_relation(SheetId),
@@ -81,12 +83,12 @@ process_sheet_table(XlsxZipHandle, RowHandler) ->
 			case zip:zip_get(TargetFile, XlsxZipHandle) of
 				{error, Reason} -> xlsx_util:sprintf("zip:zip_get ~p error:~p", [TargetFile, Reason]);
 				{ok, {_FileName, SheetBinary}} ->
-					process_sheet(SheetBinary, SheetName, RowHandler)
+					process_sheet(SheetBinary, SheetName,RowHandler)
 			end
-		end, get_xlsx_sheets()).
+		end, next_sheet ,get_xlsx_sheets()).
 
 
-process_sheet(SheetBinary, SheetName, RowHandler) ->
+process_sheet(SheetBinary, SheetName ,RowHandler) ->
 	case xmerl_scan:string(binary_to_list(SheetBinary)) of
 		{ParsedDocRootEl, _Rest} ->
 			XMLS = ParsedDocRootEl#xmlElement.content,
@@ -102,14 +104,21 @@ process_sheet(SheetBinary, SheetName, RowHandler) ->
 				end, XmlSheetDatas#xmlElement.content),
 
 			DefData = lists:duplicate(ColumnCount + 1, ""),
-			lists:foreach(
-				fun(XmlRow) ->
-					case get_row(XmlRow, DefData) of
-						[] -> nothing;
-						NewData ->
-							RowHandler(SheetName, NewData)
-					end
-				end, XmlRows);
+			RHRes = lists:foldl(
+				fun(_XmlRow, next_sheet) ->
+					next_sheet;
+					(_XmlRow, break) ->
+						break;
+					(XmlRow, next_row) ->
+						case get_row(XmlRow, DefData) of
+							[] -> next_row;
+							NewData ->
+								RowHandler(SheetName, NewData)
+						end
+				end, next_row, XmlRows),
+			if RHRes == next_row -> next_sheet;
+				true -> RHRes
+			end;
 		ExceptResult ->
 			ErrorString = xlsx_util:sprintf("xmerl_scan:string error:~p", ExceptResult),
 			error(ErrorString)
@@ -266,10 +275,11 @@ get_subnode_text(SubName,XmlNode) ->
 									   Bin = unicode:characters_to_binary(T#xmlText.value, utf8),
 									   binary_to_list(Bin)
 								   end, XmlTexts),
-%%						   binary_to_list(list_to_binary(NewList))
-						   lists:flatten(NewList)
+						   xlsx_util:str_normalize(lists:flatten(NewList))
 				   end
 	end.
+
+
 
 get_cell_info(XmlCell) ->
 	CellName = xlsx_util:xmlattribute_value_from_name('r', XmlCell),

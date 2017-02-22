@@ -19,9 +19,18 @@ stop(_State) ->
 start()->
     application:start(?MODULE).
 
+
+
 test()->
     XlsxFile = "xlsx/t.xlsx",
-    case xlsx_reader:read(XlsxFile,fun(SheetName,[Line|Row])-> io:format("~ts=====>~p | ~ts~n",[SheetName,Line,Row]) end) of
+    RowHandler =
+        fun(SheetName, [Line | Row]) ->
+            io:format("~n~ts=====>~p | ", [SheetName, Line]),
+            lists:foreach(fun(R)-> io:format("\t~ts",[R]) end,Row),
+            next_row
+        end,
+
+    case xlsx_reader:read(XlsxFile,RowHandler) of
         {error,Reason}-> io:format("read error:~p~n",[Reason]);
-        ok-> ok
+        ok-> io:format("~n")
     end.
