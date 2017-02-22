@@ -10,4 +10,17 @@
 -author("Adrianx Lau <adrianx.lau@gmail.com>").
 
 %% API
--export([]).
+-export([open/1,new_sheet/1,put_sheet/2,close/1]).
+
+open(Xlsx)->
+	ok.
+
+new_sheet(SheetName)->
+	ok.
+
+put_sheet(SheetId,Rows)->
+	ok.
+
+close(XlsxHandle)->
+	ok.
+
