@@ -21,31 +21,7 @@ start()->
 
 test()->
     XlsxFile = "xlsx/theme_1003_new.xlsx",
-    DictKey = XlsxFile,
-    ReadOp = #xlsx_read{
-        xlsx_context = DictKey,
-        sheet_handler =
-        fun(Context, SheetInfo) ->
-            case get({Context, sheet}) of
-                undefined -> put({Context, sheet}, SheetInfo);
-                OldSheetInfo -> put({Context, sheet}, [SheetInfo | OldSheetInfo])
-            end
-        end,
-
-        share_putter =
-        fun(Context, ShareString) ->
-            Table = case get({Context, share}) of
-                        undefined ->
-                            Tab = ets:new(share_table, [set, {keypos, #xlsx_share.id}]),
-                            put({Context, share}, Tab),
-                            Tab;
-                        Tab -> Tab
-                    end,
-            io:format("ShareString:~ts~n",[ShareString#xlsx_share.string]),
-            ets:insert(Table, ShareString)
-        end
-    },
-    case xlsx_reader:read(XlsxFile,ReadOp) of
+    case xlsx_reader:read(XlsxFile,fun(SheetName,Row)-> io:format(" Sheet ~ts=> ~p~n",[SheetName,Row]) end) of
         {error,Reason}-> io:format("read error:~p~n",[Reason]);
         ok-> ok
     end.

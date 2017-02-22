@@ -14,41 +14,107 @@
 %% API
 -export([read/2]).
 
--spec(read(XlsxFile :: string(),ReadOps :: [tuple()]) ->
+-record(xlsx_sheet, {id, name}).
+-record(xlsx_share, {id, string}).
+-record(xlsx_relation, {id, target, type}).
+
+-spec(read(XlsxFile :: string(), RowHandler :: atom() | function()) ->
 	{error, Resaon :: atom()} | {error, Resaon :: string()} |
 	{ok}).
-read(XlsxFile,ReadOps)->
+
+read(XlsxFile, RowHandler) ->
 	case zip:zip_open(XlsxFile, [memory]) of
-		{error,Reason}-> {error,Reason};
-		{ok,ZipHandle}->
-			read_memory(ZipHandle,ReadOps),
+		{error, Reason} -> {error, Reason};
+		{ok, ZipHandle} ->
+			read_memory(ZipHandle, RowHandler),
+			clear_xlsx_context(),
 			zip:zip_close(ZipHandle)
 	end.
 
-read_memory(XlsxZipHandle,ReadOps)->
-	case process_sheetinfos(XlsxZipHandle,ReadOps) of
-		ok->
-			case process_sharestring(XlsxZipHandle,ReadOps) of
-				ok-> ok;
-				{error,Reason}->{error,Reason}
-			end;
-		{error,Reason}->{error,Reason}
+read_memory(XlsxZipHandle, RowHandler) ->
+	try
+		process_sheetinfos(XlsxZipHandle),
+		process_sharestring(XlsxZipHandle),
+		process_relationhips(XlsxZipHandle),
+		process_sheet_table(XlsxZipHandle, RowHandler)
+	catch
+		error:Reason -> {error, Reason}
 	end.
 
-process_sharestring(ZipHandle,ReadOps)->
+process_sharestring(ZipHandle) ->
 	ShareStringFile = "xl/sharedStrings.xml",
 	case zip:zip_get(ShareStringFile, ZipHandle) of
-		{error, Reason}->
-			{error,lists:flatten(io_lib:format("zip:zip_get ~p error:~p", [ShareStringFile, Reason]))};
-		{ok, ShareStrings}->
+		{error, Reason} ->
+			ErrorString = xlsx_util:sprintf("zip:zip_get ~p error:~p", [ShareStringFile, Reason]),
+			error(ErrorString);
+		{ok, ShareStrings} ->
 			{_File, Binary} = ShareStrings,
-			SharePutter = ReadOps#xlsx_read.share_putter,
-			XlsxContext = ReadOps#xlsx_read.xlsx_context,
-			do_put_shareString(SharePutter,XlsxContext, Binary),
-			ok
+			do_put_shareString(Binary)
 	end.
 
-do_put_shareString(SharePutter, XlsxContext, BinaryString) ->
+
+process_relationhips(ZipHandle) ->
+	RelationFile = "xl/_rels/workbook.xml.rels",
+	case zip:zip_get(RelationFile, ZipHandle) of
+		{error, Reason} ->
+			ErrorString = xlsx_util:sprintf("zip:zip_get ~p error:~p", [RelationFile, Reason]),
+			error(ErrorString);
+		{ok, Relationships} ->
+			{_File, Binary} = Relationships,
+			case xmerl_scan:string(binary_to_list(Binary)) of
+				{ParsedDocRootEl, _Rest} ->
+					Result = xmerl_xpath:string("Relationship ", ParsedDocRootEl),
+					lists:foreach(fun(Relation) -> put_xlsx_relation(get_relationship_info(Relation)) end, Result);
+				ExceptResult -> ErrorString = xlsx_util:sprintf("xmerl_scan:string error:~p", ExceptResult),
+					error(ErrorString)
+			end
+	end.
+process_sheet_table(XlsxZipHandle, RowHandler) ->
+	lists:foreach(
+		fun(SheetInfo) ->
+			SheetId = SheetInfo#xlsx_sheet.id,
+			SheetName = SheetInfo#xlsx_sheet.name,
+			Relation = get_xlsx_relation(SheetId),
+			TargetFile = "xl/" ++ Relation#xlsx_relation.target,
+			case zip:zip_get(TargetFile, XlsxZipHandle) of
+				{error, Reason} -> xlsx_util:sprintf("zip:zip_get ~p error:~p", [TargetFile, Reason]);
+				{ok, {_FileName, SheetBinary}} ->
+					process_sheet(SheetBinary, SheetName, RowHandler)
+			end
+		end, get_xlsx_sheets()).
+
+
+process_sheet(SheetBinary, SheetName, RowHandler) ->
+	case xmerl_scan:string(binary_to_list(SheetBinary)) of
+		{ParsedDocRootEl, _Rest} ->
+			XMLS = ParsedDocRootEl#xmlElement.content,
+			Dimensions = xlsx_util:xmlElement_from_name('dimension', XMLS),
+			ColumnCount = xlsx_util:get_column_count(xlsx_util:xmlattribute_value_from_name('ref', Dimensions)),
+			XmlSheetDatas = xlsx_util:xmlElement_from_name('sheetData', XMLS),
+			XmlRows = lists:filter(
+				fun(XmlRow) ->
+					case xlsx_util:is_record(XmlRow, 'xmlElement') of
+						false -> false;
+						true -> XmlRow#xmlElement.name =:= 'row'
+					end
+				end, XmlSheetDatas#xmlElement.content),
+
+			DefData = lists:duplicate(ColumnCount + 1, ""),
+
+			lists:foreach(
+				fun(XmlRow) ->
+					case get_row(XmlRow, DefData) of
+						[] -> nothing;
+						NewData ->
+							RowHandler(SheetName, NewData)
+					end
+				end, XmlRows);
+		ExceptResult ->
+			ErrorString = xlsx_util:sprintf("xmerl_scan:string error:~p", ExceptResult),
+			error(ErrorString)
+	end.
+
+do_put_shareString(BinaryString) ->
 	case xmerl_scan:string(binary_to_list(BinaryString)) of
 		{ParsedDocRootEl, _Rest} ->
 			XMLS = ParsedDocRootEl#xmlElement.content,
@@ -61,22 +127,14 @@ do_put_shareString(SharePutter, XlsxContext, BinaryString) ->
 					Elements = Node#xmlElement.content,
 					lists:foldl(
 						fun(Element, AccTxt) ->
-							case is_record_ex(Element, xmlElement) of
+							case xlsx_util:is_record(Element, xmlElement) of
 								false -> AccTxt;
 								true ->
 									case Element#xmlElement.name of
 										t -> get_element_text(Element);
 										r ->
-											TextNodes = Element#xmlElement.content,
-											[FltTextNode | _] = lists:filter(
-												fun(TextNode) ->
-													IsRecord = is_record_ex(TextNode, xmlElement),
-													if not IsRecord -> false;
-														true ->
-															TextNode#xmlElement.name =:= 't'
-													end
-												end, TextNodes),
-											AccTxt ++ get_element_text(FltTextNode);
+											TxtNode = xlsx_util:xmlElement_from_name('t', Element#xmlElement.content),
+											AccTxt ++ get_element_text(TxtNode);
 										_ ->
 											AccTxt
 									end
@@ -85,38 +143,31 @@ do_put_shareString(SharePutter, XlsxContext, BinaryString) ->
 				end, FltNodes),
 			lists:foldl(
 				fun(Txt, Id) ->
-					SharePutter(XlsxContext, #xlsx_share{id=Id, string = Txt}),
+					put_xlsx_share(Id, Txt),
 					Id + 1
-				end, 0, TextList),
-			ok; %% return ok
-		ExceptResult -> {error, lists:flatten(io_lib:format("xmerl_scan:string error:~p", ExceptResult))}
+				end, 0, TextList);
+		ExceptResult ->
+			ErrorString = xlsx_util:sprintf("xmerl_scan:string error:~p", ExceptResult),
+			error(ErrorString)
 	end.
 
 
-is_record_ex(Term, RecordTag)->
-	IsTerm = erlang:is_tuple(Term),
-	if (not IsTerm)
-		->false;
-		true->
-			element(1, Term) =:= RecordTag
-	end.
 
-
-get_element_text(Element)->
-	IsRecord = is_record_ex(Element, xmlElement),
-	if not IsRecord->[];
-		true->
-			if element(#xmlElement.name, Element) =:= 't'->
+get_element_text(Element) ->
+	IsRecord = xlsx_util:is_record(Element, xmlElement),
+	if not IsRecord -> [];
+		true ->
+			if element(#xmlElement.name, Element) =:= 't' ->
 
 				TextNodes = lists:filter(
 					fun(Text) ->
-						is_record_ex(Text, xmlText)
+						xlsx_util:is_record(Text, xmlText)
 					end,
 					Element#xmlElement.content),
 
 				case TextNodes of
-					[]->[];
-					_->lists:flatmap(
+					[] -> [];
+					_ -> lists:flatmap(
 						fun(T) ->
 							Text1 = element(#xmlText.value, T),
 							Text1
@@ -125,39 +176,168 @@ get_element_text(Element)->
 				end
 			end
 	end.
-process_sheetinfos(ZipHandle,ReadOps)->
+process_sheetinfos(ZipHandle) ->
 	SheetFile = "xl/workbook.xml",
 	case zip:zip_get(SheetFile, ZipHandle) of
-		{error, Reason}->
-			{error,Reason};
-		{ok, WorkBook}->
+		{error, Reason} ->
+			ErrorString = xlsx_util:sprintf("zip:zip_get ~p error:~p", [SheetFile, Reason]),
+			error(ErrorString);
+		{ok, WorkBook} ->
 			{_File, Binary} = WorkBook,
 			case xmerl_scan:string(binary_to_list(Binary)) of
-				{ParsedDocRootEl, _Rest}->
+				{ParsedDocRootEl, _Rest} ->
 					SheetInfos = xmerl_xpath:string("//sheet", ParsedDocRootEl),
-					SheetPutter = ReadOps#xlsx_read.sheet_handler,
-					XlsxContext = ReadOps#xlsx_read.xlsx_context,
 					lists:foreach(
-						fun(SheetInfoRaw)->
+						fun(SheetInfoRaw) ->
 							SheetInfo = sheetinfo_from_workbook(SheetInfoRaw),
-							SheetPutter(XlsxContext,SheetInfo)
+							put_xlsx_sheet(SheetInfo)
 						end, SheetInfos),
 					ok;
-				ExceptResult->{error,lists:flatten(io_lib:format("xmerl_scan:string error:~p", ExceptResult))}
+				ExceptResult ->
+					ErrorString = xlsx_util:sprintf("xmerl_scan:string error:~p", ExceptResult),
+					error(ErrorString)
 			end
 	end.
 
 
-sheetinfo_from_workbook(SheetInfo)->
+sheetinfo_from_workbook(SheetInfo) ->
 	Attributes = SheetInfo#xmlElement.attributes,
 	lists:foldl(
-		fun(Attr, Acc)->
-			if Attr#xmlAttribute.name =:= 'r:id'->
+		fun(Attr, Acc) ->
+			if Attr#xmlAttribute.name =:= 'r:id' ->
 				Acc#xlsx_sheet{id = Attr#xmlAttribute.value};
-				Attr#xmlAttribute.name =:= 'name'->
+				Attr#xmlAttribute.name =:= 'name' ->
 					Acc#xlsx_sheet{name = Attr#xmlAttribute.value};
-				true->
+				true ->
 					Acc
 			end
 		end, #xlsx_sheet{}, Attributes).
 
+get_relationship_info(Relation) ->
+	Attributes = Relation#xmlElement.attributes,
+	lists:foldl(fun(Attr, Acc) ->
+		if Attr#xmlAttribute.name =:= 'Target' ->
+			Acc#xlsx_relation{target = Attr#xmlAttribute.value};
+			Attr#xmlAttribute.name =:= 'Id' ->
+				Acc#xlsx_relation{id = Attr#xmlAttribute.value};
+			Attr#xmlAttribute.name =:= 'Type' ->
+				Acc#xlsx_relation{type = filename:basename(Attr#xmlAttribute.value)};
+			true ->
+				Acc
+		end
+				end, #xlsx_relation{}, Attributes).
+
+
+get_row(XmlRow, DefaultList) ->
+	XmlCells = lists:filter(
+		fun(XmlCell) ->
+			case xlsx_util:is_record(XmlCell, 'xmlElement') of
+				false -> false;
+				true -> XmlCell#xmlElement.name =:= 'c'
+			end
+		end, XmlRow#xmlElement.content),
+
+	case XmlCells of
+		[] -> [];
+		[XmlCell1 | LeftXmlCells] ->
+			{CellName1, CellValue1} = get_cell_info(XmlCell1),
+			{X1, Y1} = xlsx_util:get_field_number(CellName1),
+			RowDataWithKey = xlsx_util:take_nth_list(1, DefaultList, Y1),
+			RowData1 = xlsx_util:take_nth_list(X1 + 1, RowDataWithKey, CellValue1),
+			NewList = lists:foldl(
+				fun(Cell, RowData) ->
+					{CellName, CellValue} = get_cell_info(Cell),
+					{X, _Y} = xlsx_util:get_field_number(CellName),
+					xlsx_util:take_nth_list(X + 1, RowData, CellValue)
+				end, RowData1, LeftXmlCells),
+			list_to_tuple(NewList)
+	end.
+
+
+get_subnode_text(XmlNode, SubName) ->
+	SubNodes = lists:filter(
+		fun(SubNode) ->
+			SubNode#xmlElement.name =:= SubName
+		end, XmlNode#xmlElement.content),
+	case SubNodes of
+		[] -> [];
+		[SubNode | _] ->
+			case SubNode#xmlElement.content of
+				[] -> [];
+				XmlTexts ->
+					NewList =
+						lists:map(
+							fun(T) ->
+								Bin = unicode:characters_to_binary(T#xmlText.value, utf8),
+								binary_to_list(Bin)
+							end, XmlTexts),
+					try
+						binary_to_list(list_to_binary(NewList))
+					catch
+						Exception:Reason ->
+							ErrorString = xlsx_util:sprintf("getsubnode excetipn ~p:~p", [Exception, Reason]),
+							error(ErrorString)
+					end
+			end
+	end.
+
+get_cell_info(XmlCell) ->
+	CellName = xlsx_util:xmlattribute_value_from_name('r', XmlCell),
+	CellValue = case xlsx_util:has_attribute_value(XmlCell, 't', "s") of %% 1: t="s" => shareString | 2: t="str" => <v>String</v>
+					true ->
+						NewCellValue = list_to_integer(get_subnode_text(XmlCell, 'v')),
+						get_xlsx_share_string(NewCellValue);
+					false ->
+						get_subnode_text(XmlCell, 'v')
+				end,
+	{CellName, CellValue}.
+
+%%
+%% xlsx inner helper
+%%
+put_xlsx_sheet(SheetInfo) ->
+	case get({xlsx_inner_context, sheet}) of
+		undefined -> put({xlsx_inner_context, sheet}, [SheetInfo]);
+		SheetInfos -> put({xlsx_inner_context, sheet}, [SheetInfo | SheetInfos])
+	end.
+
+get_xlsx_sheets() ->
+	case get({xlsx_inner_context, sheet}) of
+		undefined -> [];
+		SheetInfos -> SheetInfos
+	end.
+
+get_xlsx_share_table() ->
+	case get({xlsx_inner_context, share}) of
+		undefined -> ets:new(share_string, [set, {keypos, #xlsx_share.id}]);
+		T -> T
+	end.
+
+put_xlsx_share(Id, String) ->
+	Tab = get_xlsx_share_table(),
+	ets:insert(Tab, #xlsx_share{id = Id, string = String}).
+
+get_xlsx_share_string(Id) ->
+
+	Tab = get_xlsx_share_table(),
+	case ets:lookup(Tab, Id) of
+		[] -> "";
+		[Obj] -> Obj#xlsx_share.string
+	end.
+%%%%%%%%%
+put_xlsx_relation(Relation) ->
+	case get({xlsx_inner_context, relation}) of
+		undefined -> put({xlsx_inner_context, relation}, [Relation]);
+		OldRelations -> put({xlsx_inner_context, relation}, [Relation | OldRelations])
+	end.
+
+get_xlsx_relation(Id) ->
+	case get({xlsx_inner_context, relation}) of
+		undefined -> false;
+		Relations -> lists:keyfind(Id, #xlsx_relation.id, Relations)
+	end.
+clear_xlsx_context() ->
+	erlang:erase({xlsx_inner_context, sheet}),
+	Tab = get_xlsx_share_table(),
+	ets:delete(Tab),
+	erlang:erase({xlsx_inner_context, share}).
