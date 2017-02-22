@@ -2,13 +2,13 @@
 Reader &amp; writer for Xlsx in Erlang 
 
 
-read(XlsxFile, RowHandler)
+#read(XlsxFile, RowHandler)
 
-XlsxFile : only support higher than excel 2003 ,could be .xlsx or .xlsxm
-RowHandler: callback function
-    fun(SheetName,RowData)
-        SheetName:Sheet Name
-        RowData ： true text list
+##XlsxFile : only support higher than excel 2003 ,could be .xlsx or .xlsxm
+##RowHandler: callback function
+###fun(SheetName,RowData)
+###SheetName:Sheet Name
+###RowData ： true text list
 
 so you can write such code:
 ```
