@@ -20,8 +20,8 @@ start()->
     application:start(?MODULE).
 
 test()->
-    XlsxFile = "xlsx/theme_1003_new.xlsx",
-    case xlsx_reader:read(XlsxFile,fun(SheetName,Row)-> io:format(" Sheet ~ts=> ~p~n",[SheetName,Row]) end) of
+    XlsxFile = "xlsx/t.xlsx",
+    case xlsx_reader:read(XlsxFile,fun(SheetName,[Line|Row])-> io:format("~ts=====>~p | ~ts~n",[SheetName,Line,Row]) end) of
         {error,Reason}-> io:format("read error:~p~n",[Reason]);
         ok-> ok
     end.

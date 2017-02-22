@@ -26,9 +26,10 @@ read(XlsxFile, RowHandler) ->
 	case zip:zip_open(XlsxFile, [memory]) of
 		{error, Reason} -> {error, Reason};
 		{ok, ZipHandle} ->
-			read_memory(ZipHandle, RowHandler),
+			Result= read_memory(ZipHandle, RowHandler),
 			clear_xlsx_context(),
-			zip:zip_close(ZipHandle)
+			zip:zip_close(ZipHandle),
+			Result
 	end.
 
 read_memory(XlsxZipHandle, RowHandler) ->
@@ -36,7 +37,8 @@ read_memory(XlsxZipHandle, RowHandler) ->
 		process_sheetinfos(XlsxZipHandle),
 		process_sharestring(XlsxZipHandle),
 		process_relationhips(XlsxZipHandle),
-		process_sheet_table(XlsxZipHandle, RowHandler)
+		process_sheet_table(XlsxZipHandle, RowHandler),
+			ok
 	catch
 		error:Reason -> {error, Reason}
 	end.
@@ -100,7 +102,6 @@ process_sheet(SheetBinary, SheetName, RowHandler) ->
 				end, XmlSheetDatas#xmlElement.content),
 
 			DefData = lists:duplicate(ColumnCount + 1, ""),
-
 			lists:foreach(
 				fun(XmlRow) ->
 					case get_row(XmlRow, DefData) of
@@ -236,7 +237,6 @@ get_row(XmlRow, DefaultList) ->
 				true -> XmlCell#xmlElement.name =:= 'c'
 			end
 		end, XmlRow#xmlElement.content),
-
 	case XmlCells of
 		[] -> [];
 		[XmlCell1 | LeftXmlCells] ->
@@ -244,20 +244,20 @@ get_row(XmlRow, DefaultList) ->
 			{X1, Y1} = xlsx_util:get_field_number(CellName1),
 			RowDataWithKey = xlsx_util:take_nth_list(1, DefaultList, Y1),
 			RowData1 = xlsx_util:take_nth_list(X1 + 1, RowDataWithKey, CellValue1),
-			NewList = lists:foldl(
+			lists:foldl(
 				fun(Cell, RowData) ->
 					{CellName, CellValue} = get_cell_info(Cell),
 					{X, _Y} = xlsx_util:get_field_number(CellName),
 					xlsx_util:take_nth_list(X + 1, RowData, CellValue)
-				end, RowData1, LeftXmlCells),
-			list_to_tuple(NewList)
+				end, RowData1, LeftXmlCells)
 	end.
 
 
 get_subnode_text(SubName,XmlNode) ->
 	case lists:keyfind(SubName, #xmlElement.name, XmlNode#xmlElement.content) of
 		false -> [];
-		SubNode -> case SubNode#xmlElement.content of
+		SubNode ->
+			case SubNode#xmlElement.content of
 					   [] -> [];
 					   XmlTexts ->
 						   NewList =
@@ -266,6 +266,7 @@ get_subnode_text(SubName,XmlNode) ->
 									   Bin = unicode:characters_to_binary(T#xmlText.value, utf8),
 									   binary_to_list(Bin)
 								   end, XmlTexts),
+%%						   binary_to_list(list_to_binary(NewList))
 						   lists:flatten(NewList)
 				   end
 	end.
@@ -287,7 +288,7 @@ get_cell_info(XmlCell) ->
 put_xlsx_sheet(SheetInfo) ->
 	case get({xlsx_inner_context, sheet}) of
 		undefined -> put({xlsx_inner_context, sheet}, [SheetInfo]);
-		SheetInfos -> put({xlsx_inner_context, sheet}, [SheetInfo | SheetInfos])
+		SheetInfos -> put({xlsx_inner_context, sheet}, SheetInfos ++ [SheetInfo])
 	end.
 
 get_xlsx_sheets() ->
@@ -298,8 +299,12 @@ get_xlsx_sheets() ->
 
 get_xlsx_share_table() ->
 	case get({xlsx_inner_context, share}) of
-		undefined -> ets:new(share_string, [set, {keypos, #xlsx_share.id}]);
-		T -> T
+		undefined ->
+			Tab = ets:new(share_string, [set, {keypos, #xlsx_share.id}]),
+			put({xlsx_inner_context, share},Tab),
+			Tab;
+		Tab ->
+			Tab
 	end.
 
 put_xlsx_share(Id, String) ->
