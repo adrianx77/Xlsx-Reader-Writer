@@ -24,10 +24,14 @@ start()->
 test()->
     XlsxFile = "xlsx/t.xlsx",
     RowHandler =
-        fun(SheetName, [Line | Row]) ->
-            io:format("~n~ts=====>~p | ", [SheetName, Line]),
+        fun(SheetName, [1 | Row]) ->
+            io:format("~n~ts=====>~p | ", [SheetName, 1]),
             lists:foreach(fun(R)-> io:format("\t~ts",[R]) end,Row),
-            next_row
+            next_row;
+            (SheetName, [Line | Row]) ->
+                io:format("~n~ts=====>~p | ", [SheetName, Line]),
+                lists:foreach(fun(R)-> io:format("\t~ts",[R]) end,Row),
+            next_sheet
         end,
 
     case xlsx_reader:read(XlsxFile,RowHandler) of
