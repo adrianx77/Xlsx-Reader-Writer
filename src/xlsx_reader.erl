@@ -254,41 +254,30 @@ get_row(XmlRow, DefaultList) ->
 	end.
 
 
-get_subnode_text(XmlNode, SubName) ->
-	SubNodes = lists:filter(
-		fun(SubNode) ->
-			SubNode#xmlElement.name =:= SubName
-		end, XmlNode#xmlElement.content),
-	case SubNodes of
-		[] -> [];
-		[SubNode | _] ->
-			case SubNode#xmlElement.content of
-				[] -> [];
-				XmlTexts ->
-					NewList =
-						lists:map(
-							fun(T) ->
-								Bin = unicode:characters_to_binary(T#xmlText.value, utf8),
-								binary_to_list(Bin)
-							end, XmlTexts),
-					try
-						binary_to_list(list_to_binary(NewList))
-					catch
-						Exception:Reason ->
-							ErrorString = xlsx_util:sprintf("getsubnode excetipn ~p:~p", [Exception, Reason]),
-							error(ErrorString)
-					end
-			end
+get_subnode_text(SubName,XmlNode) ->
+	case lists:keyfind(SubName, #xmlElement.name, XmlNode#xmlElement.content) of
+		false -> [];
+		SubNode -> case SubNode#xmlElement.content of
+					   [] -> [];
+					   XmlTexts ->
+						   NewList =
+							   lists:map(
+								   fun(T) ->
+									   Bin = unicode:characters_to_binary(T#xmlText.value, utf8),
+									   binary_to_list(Bin)
+								   end, XmlTexts),
+						   lists:flatten(NewList)
+				   end
 	end.
 
 get_cell_info(XmlCell) ->
 	CellName = xlsx_util:xmlattribute_value_from_name('r', XmlCell),
-	CellValue = case xlsx_util:has_attribute_value(XmlCell, 't', "s") of %% 1: t="s" => shareString | 2: t="str" => <v>String</v>
+	CellValue = case xlsx_util:has_attribute_value( 't', "s",XmlCell) of %% 1: t="s" => shareString | 2: t="str" => <v>String</v>
 					true ->
-						NewCellValue = list_to_integer(get_subnode_text(XmlCell, 'v')),
+						NewCellValue = list_to_integer(get_subnode_text('v',XmlCell)),
 						get_xlsx_share_string(NewCellValue);
 					false ->
-						get_subnode_text(XmlCell, 'v')
+						get_subnode_text('v',XmlCell)
 				end,
 	{CellName, CellValue}.
 
@@ -318,7 +307,6 @@ put_xlsx_share(Id, String) ->
 	ets:insert(Tab, #xlsx_share{id = Id, string = String}).
 
 get_xlsx_share_string(Id) ->
-
 	Tab = get_xlsx_share_table(),
 	case ets:lookup(Tab, Id) of
 		[] -> "";
@@ -340,4 +328,5 @@ clear_xlsx_context() ->
 	erlang:erase({xlsx_inner_context, sheet}),
 	Tab = get_xlsx_share_table(),
 	ets:delete(Tab),
+	erlang:erase({xlsx_inner_context,relation}),
 	erlang:erase({xlsx_inner_context, share}).

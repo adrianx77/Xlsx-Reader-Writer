@@ -21,7 +21,7 @@ is_record(_Term, _RecordTag)-> false.
 
 
 
-has_attribute_value(XmlNode, AttrName, AttValue) ->
+has_attribute_value( AttrName, AttValue,XmlNode) ->
 	lists:any(fun(Attr) -> (Attr#xmlAttribute.name =:= AttrName) and
 		(Attr#xmlAttribute.value =:= AttValue)
 			  end, XmlNode#xmlElement.attributes).
@@ -37,6 +37,8 @@ xmlElement_from_name(Name,XmlNode)->
 		false-> error(xlsx_util:sprintf("xmlElement_from_name exception: ~p ~p",[Name,XmlNode]));
 		Element-> Element
 	end.
+
+
 
 get_column_count(DimString) ->
 	[BeginStr, EndStr] = case string:tokens(DimString, ":") of
