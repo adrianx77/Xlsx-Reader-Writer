@@ -6,6 +6,7 @@
 -export([start/2, stop/1]).
 -export([start/0]).
 -export([test/0]).
+-export([test2/0]).
 %% ===================================================================
 %% Application callbacks
 %% ===================================================================
@@ -19,6 +20,12 @@ stop(_State) ->
 start()->
     application:start(?MODULE).
 
+test2()->
+    XlsxFile = "xlsx/t2.xlsx",
+    XlsxHandle = xlsx_writer:create(XlsxFile),
+    SheetHandle = xlsx_writer:create_sheet("Hello",[[1,1,1,2],[1,2,2]]),
+    xlsx_writer:add_sheet(XlsxHandle,SheetHandle),
+    xlsx_writer:close(XlsxHandle).
 
 
 test()->

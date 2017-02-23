@@ -49,6 +49,18 @@ get_column_count(DimString) ->
 	[End] = string:tokens(EndStr, "0123456789"),
 	field_to_num(End) - field_to_num(Begin) + 1.
 
+
+-define(APHALIC_LENGTH, ($Z - $A + 1) ).
+
+get_column_string(Column)->
+	lists:reverse(do_get_column_string(Column)).
+
+do_get_column_string(Column)when Column < ?APHALIC_LENGTH  ->
+	[$A + Column ];
+do_get_column_string(Column)->
+	[ $A  + Column rem ?APHALIC_LENGTH  | do_get_column_string(( Column div ?APHALIC_LENGTH) -1)].
+
+
 integer_pow(N, L) ->
 	if L >= 1 ->
 		N * integer_pow(N, L - 1);
@@ -66,6 +78,9 @@ get_field_number(FieldString)->
 	[FieldName] = string:tokens(FieldString, "0123456789"),
 	PostNumString = string:right(FieldString, length(FieldString) - length(FieldName)),
 	{field_to_num(FieldName), list_to_integer(PostNumString)}.
+
+get_field_string(Column,Row)->
+	get_column_string(Column) ++ integer_to_list(Row).
 
 take_nth_list(N, List, Value)->
 	{NewList, _Acc} = lists:mapfoldl(
