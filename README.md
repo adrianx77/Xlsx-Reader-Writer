@@ -63,3 +63,5 @@ test2()->
 
 ## Future
 I will add some prompt for writer.
+
+我的Erlang技术交流QQ群:221307508
