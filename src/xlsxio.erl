@@ -24,7 +24,9 @@ test2()->
     XlsxFile = "xlsx/t2.xlsx",
     XlsxHandle = xlsx_writer:create(XlsxFile),
     SheetHandle = xlsx_writer:create_sheet("Hello",[[1,1,1,2],[1,2,2]]),
+    SheetHandle2 = xlsx_writer:create_sheet("Hello2",[[1,1,1,2],[1,2,2]]),
     xlsx_writer:add_sheet(XlsxHandle,SheetHandle),
+    xlsx_writer:add_sheet(XlsxHandle,SheetHandle2),
     xlsx_writer:close(XlsxHandle).
 
 

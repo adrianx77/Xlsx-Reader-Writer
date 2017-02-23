@@ -6,11 +6,13 @@ Reader &amp; Writer for Xlsx in Erlang
 shell>git clone git@github.com:adrianx77/Xlsx-Reader-Writer.git
 shell>./rebar co
 shell>erl xlsxio -pa ebin -s xlsxio test
+shell>erl xlsxio -pa ebin -s xlsxio test2
+
 ```
 
 
 ```
-read(XlsxFile, RowHandler)
+xlsx_reader:read(XlsxFile, RowHandler)
 
     XlsxFile  : only support higher than excel 2003 ,could be .xlsx or .xlsxm
     RowHandler: callback function =>fun(SheetName,RowData)
@@ -41,6 +43,23 @@ test()->
         ok-> io:format("~n")
     end.
 ```
+```
+use Writer should with 4 step
+1、xlsx_writer:create(XlsxFile)->XlsxHandle
+2、xlsx_writer:create_sheet(Title,Rows)->SheetHandle
+3、xlsx_writer:add_sheet(XlsxHandle,SheetHandle)-> ok.
+4、xlsx_writer:close(XlsxHandle)
+
+```
+```
+test2()->
+    XlsxFile = "xlsx/t2.xlsx",
+    SheetHandle = xlsx_writer:create_sheet("Hello",[[1,1,1,2],[1,2,2]]),
+    SheetHandle2 = xlsx_writer:create_sheet("Hello2",[[1,1,1,2],[1,2,2]]),
+    xlsx_writer:add_sheet(XlsxHandle,SheetHandle),
+    xlsx_writer:add_sheet(XlsxHandle,SheetHandle2),
+    xlsx_writer:close(XlsxHandle).
+```
 
 ## Future
-I will Add support for writer.
+I will add some prompt for writer.
