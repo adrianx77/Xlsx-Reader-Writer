@@ -22,7 +22,7 @@ start()->
 
 test2()->
     XlsxFile = "xlsx/t2.xlsx",
-    XlsxHandle = xlsx_writer:create(XlsxFile),
+    XlsxHandle = xlsx_writer:create(XlsxFile,"刘金鑫"),
     SheetHandle = xlsx_writer:create_sheet("Hello",[[1,1,1,2],[1,2,2]]),
     SheetHandle2 = xlsx_writer:create_sheet("Hello2",[[1,1,1,2],[1,2,2]]),
     xlsx_writer:add_sheet(XlsxHandle,SheetHandle),

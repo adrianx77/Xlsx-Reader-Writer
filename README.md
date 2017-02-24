@@ -45,7 +45,7 @@ test()->
 ```
 ```
 use Writer should with 4 step
-1、xlsx_writer:create(XlsxFile)->XlsxHandle
+1、xlsx_writer:create(XlsxFile,Author)->XlsxHandle
 2、xlsx_writer:create_sheet(Title,Rows)->SheetHandle
 3、xlsx_writer:add_sheet(XlsxHandle,SheetHandle)-> ok.
 4、xlsx_writer:close(XlsxHandle)
@@ -54,6 +54,7 @@ use Writer should with 4 step
 ```
 test2()->
     XlsxFile = "xlsx/t2.xlsx",
+    XlsxHandle = xlsx_writer:create(XlsxFile,"adrianx.lau@gmail.com"),
     SheetHandle = xlsx_writer:create_sheet("Hello",[[1,1,1,2],[1,2,2]]),
     SheetHandle2 = xlsx_writer:create_sheet("Hello2",[[1,1,1,2],[1,2,2]]),
     xlsx_writer:add_sheet(XlsxHandle,SheetHandle),

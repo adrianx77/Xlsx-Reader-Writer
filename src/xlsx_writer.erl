@@ -9,16 +9,16 @@
 -module(xlsx_writer).
 -author("Adrianx Lau <adrianx.lau@gmail.com>").
 %%-record(xlsx, {tmp, files=[], sheets=[]}).
--record(xlsx_write_context,{outfile = "",files=[],sheets=[]}).
+-record(xlsx_write_context,{outfile = "",author="",files=[],sheets=[]}).
 -record(xlsx_write_sheet,{title,rows=[],dimension}).
 -record(xlsx_write_file,{name,content}).
 
 %% API
--export([create/1,add_sheet/2,create_sheet/2,close/1]).
+-export([create/2,add_sheet/2,create_sheet/2,close/1]).
 
-create(Xlsx)->
+create(Xlsx,Author)->
 	Handle = erlang:system_time(nano_seconds),
-	put_context(Handle,#xlsx_write_context{outfile = Xlsx}),
+	put_context(Handle,#xlsx_write_context{outfile = Xlsx,author = Author}),
 	Handle.
 
 add_sheet(XlsxHandle,SheetHandle)->
@@ -46,7 +46,7 @@ normalize_dimension(Rows)->
 				true-> Max
 			end
 		end,0,Rows),
-	"A1:" ++ xlsx_util:get_field_string(MaxCol ,length(Rows)).
+	["A1:" , xlsx_util:get_field_string(MaxCol ,length(Rows))].
 
 put_context(XlsxHandle,Context)->
 	put({xlsx_write_context,XlsxHandle},Context).
@@ -88,26 +88,29 @@ do_sheets(Sheets)->
 			#xlsx_write_sheet{dimension = Dimension,rows = Rows} = get_sheet(SheetHandle),
 			#xlsx_write_file{
 				name = "xl/worksheets/sheet" ++ I ++ ".xml",
-				content = 		"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
-				"<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
-				++
-				Dimension ++
-				"<sheetData>" ++
-				lists:flatmap(fun({RIdx,Row})->encode_row(RIdx, Row) end, lists:zip(lists:seq(1, length(Rows)), Rows)) ++
-				"</sheetData></worksheet>"
+				content = [
+					"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+					"<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
+					, Dimension
+					,"<sheetData>" ,
+					lists:map(fun({RIdx,Row})->encode_row(RIdx, Row) end, lists:zip(lists:seq(1, length(Rows)), Rows)) ,
+					"</sheetData></worksheet>"]
 			}
 		end, lists:zip(lists:seq(1, length(Sheets)), Sheets)).
 
-do_doc_props(_Context, Acc) ->
+do_doc_props(#xlsx_write_context{author = Author}, Acc) ->
+	{{Y,M,D},{H,Min,S}} = erlang:universaltime(),
 	[
 		#xlsx_write_file{
 			name = "docProps/core.xml",
-			content =
+			content =[
 			"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
 			"<cp:coreProperties xmlns:cp=\"http://schemas.openxmlformats.org/package/2006/metadata/core-properties\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:dcmitype=\"http://purl.org/dc/dcmitype/\" xmlns:dcterms=\"http://purl.org/dc/terms/\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">"
-			"   <dcterms:created xsi:type=\"dcterms:W3CDTF\">2010-07-20T14:30:58.00Z</dcterms:created>"
+			"   <dc:creator>",unicode:characters_to_binary(Author),"</dc:creator>"
+			"   <cp:lastModifiedBy>",unicode:characters_to_binary(Author),"</cp:lastModifiedBy>"
+			"   <dcterms:created xsi:type=\"dcterms:W3CDTF\">",io_lib:format("~p-~2..0w-~2..0wT~2..0w:~2..0w:~2..0wZ",[Y,M,D,H,Min,S]),"</dcterms:created>"
 			"   <cp:revision>0</cp:revision>"
-			"</cp:coreProperties>"
+			"</cp:coreProperties>"]
 		},
 		#xlsx_write_file{
 			name = "docProps/app.xml",
@@ -273,7 +276,7 @@ do_workbook(#xlsx_write_context{sheets = Sheets},Acc)->
 					fun({Idx, SheetHandle}) ->
 						I = integer_to_list(Idx),
 						#xlsx_write_sheet{title = SheetName} = get_sheet(SheetHandle),
-						["<sheet name=\"" , z_html:escape(SheetName) , "\" sheetId=\"" , I , "\" r:id=\"sheet" ,I , "\"/>"]
+						["<sheet name=\"" , xlsx_util:escape(SheetName) , "\" sheetId=\"" , I , "\" r:id=\"sheet" ,I , "\"/>"]
 					end,
 					lists:zip(lists:seq(1, length(Sheets)), Sheets)) ,
 				"</sheets></workbook>"]
@@ -311,11 +314,11 @@ encode(_Dt = {{_,_,_},{_,_,_}}) ->
 	{n, ["<v>111</v>"], 3};
 %% @doc bold
 encode({b, Str}) ->
-	{inlineStr, ["<is><t>", z_html:escape(z_convert:to_list(Str)), "</t></is>"], 7};
+	{inlineStr, ["<is><t>", xlsx_util:escape(xlsx_util:to_list(Str)), "</t></is>"], 7};
 %% @doc bold
 encode({i, Str}) ->
-	{inlineStr, ["<is><t>", z_html:escape(z_convert:to_list(Str)), "</t></is>"], 8};
+	{inlineStr, ["<is><t>", xlsx_util:escape(xlsx_util:to_list(Str)), "</t></is>"], 8};
 encode({f, Str}) ->
-	{inlineStr, ["<is><t>", z_html:escape(z_convert:to_list(Str)), "</t></is>"], 9};
+	{inlineStr, ["<is><t>", xlsx_util:escape(xlsx_util:to_list(Str)), "</t></is>"], 9};
 encode(Str) ->
-	{inlineStr, ["<is><t>", z_html:escape(z_convert:to_list(Str)), "</t></is>"], 5}.
+	{inlineStr, ["<is><t>", xlsx_util:escape(xlsx_util:to_list(Str)), "</t></is>"], 5}.
