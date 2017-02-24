@@ -22,8 +22,8 @@ start()->
 
 test2()->
     XlsxFile = "xlsx/t2.xlsx",
-    XlsxHandle = xlsx_writer:create(XlsxFile,"刘金鑫"),
-    SheetHandle = xlsx_writer:create_sheet("Hello",[[1,1,1,2],[1,2,2]]),
+    XlsxHandle = xlsx_writer:create(XlsxFile,unicode:characters_to_binary("刘金鑫")),
+    SheetHandle = xlsx_writer:create_sheet("Hello",[[1,1,unicode:characters_to_binary("刘某人"),2],[1,2.6,""]]),
     SheetHandle2 = xlsx_writer:create_sheet("Hello2",[[1,1,1,2],[1,2,2]]),
     xlsx_writer:add_sheet(XlsxHandle,SheetHandle),
     xlsx_writer:add_sheet(XlsxHandle,SheetHandle2),

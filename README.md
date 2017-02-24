@@ -45,10 +45,14 @@ test()->
 ```
 ```
 use Writer should with 4 step
-1、xlsx_writer:create(XlsxFile,Author)->XlsxHandle
-2、xlsx_writer:create_sheet(Title,Rows)->SheetHandle
-3、xlsx_writer:add_sheet(XlsxHandle,SheetHandle)-> ok.
-4、xlsx_writer:close(XlsxHandle)
+Author should be iolist or binary ,if your data with unicode code bigger
+ than 255 you shoud convert by unicode:characters_to_binary
+If CellData in Rows is string ，you should call unicode:characters_to_binary first.
+
+1、xlsx_writer:create(XlsxFile,Author)=>XlsxHandle
+2、xlsx_writer:create_sheet(Title,Rows)=>SheetHandle
+3、xlsx_writer:add_sheet(XlsxHandle,SheetHandle)=> ok.
+4、xlsx_writer:close(XlsxHandle).
 
 ```
 ```

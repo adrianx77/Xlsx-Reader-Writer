@@ -106,8 +106,8 @@ do_doc_props(#xlsx_write_context{author = Author}, Acc) ->
 			content =[
 			"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
 			"<cp:coreProperties xmlns:cp=\"http://schemas.openxmlformats.org/package/2006/metadata/core-properties\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:dcmitype=\"http://purl.org/dc/dcmitype/\" xmlns:dcterms=\"http://purl.org/dc/terms/\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">"
-			"   <dc:creator>",unicode:characters_to_binary(Author),"</dc:creator>"
-			"   <cp:lastModifiedBy>",unicode:characters_to_binary(Author),"</cp:lastModifiedBy>"
+			"   <dc:creator>",Author,"</dc:creator>"
+			"   <cp:lastModifiedBy>",Author,"</cp:lastModifiedBy>"
 			"   <dcterms:created xsi:type=\"dcterms:W3CDTF\">",io_lib:format("~p-~2..0w-~2..0wT~2..0w:~2..0w:~2..0wZ",[Y,M,D,H,Min,S]),"</dcterms:created>"
 			"   <cp:revision>0</cp:revision>"
 			"</cp:coreProperties>"]
