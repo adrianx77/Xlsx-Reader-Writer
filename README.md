@@ -59,8 +59,8 @@ If CellData in Rows is string ，you should call unicode:characters_to_binary fi
 test2()->
     XlsxFile = "xlsx/t2.xlsx",
     XlsxHandle = xlsx_writer:create(XlsxFile,"adrianx.lau@gmail.com"),
-    SheetHandle = xlsx_writer:create_sheet("Hello",[[1,1,1,2],[1,2,2]]),
-    SheetHandle2 = xlsx_writer:create_sheet("Hello2",[[1,1,1,2],[1,2,2]]),
+    SheetHandle = xlsx_writer:create_sheet("Hello",[[2,1,1,2],[3,2,2]]),  %% no first line
+    SheetHandle2 = xlsx_writer:create_sheet("Hello2",[[1,1,1,2],[4,2,2]]), %% ignor line 2,3
     xlsx_writer:add_sheet(XlsxHandle,SheetHandle),
     xlsx_writer:add_sheet(XlsxHandle,SheetHandle2),
     xlsx_writer:close(XlsxHandle).
