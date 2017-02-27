@@ -29,9 +29,16 @@ add_sheet(XlsxHandle,SheetHandle)->
 create_sheet(Title,Rows)->
 	SheetHandle = erlang:system_time(nano_seconds),
 	Dimension = normalize_dimension(Rows),
-	SheetContext = #xlsx_write_sheet{title=Title,rows = Rows,dimension = Dimension},
+	SheetContext = #xlsx_write_sheet{title=Title,rows = add_rows([],Rows),dimension = Dimension},
 	put_sheet(SheetHandle,SheetContext),
 	SheetHandle.
+
+add_rows(OldRows,NewRows)->
+	lists:foldl(
+		fun([Index|Row],Acc)->
+		lists:keystore(Index,1,Acc,{Index,Row})
+		end,OldRows,NewRows).
+
 
 put_sheet(SheetHandle,SheetContext)->
 	put({xlsx_write_sheet,SheetHandle},SheetContext).
@@ -40,13 +47,17 @@ get_sheet(SheetHandle)->
 	get({xlsx_write_sheet,SheetHandle}).
 
 normalize_dimension(Rows)->
-	MaxCol = lists:foldl(
-		fun(Row,Max)->
-			if length(Row)> Max-> length(Row);
-				true-> Max
-			end
-		end,0,Rows),
-	["A1:" , xlsx_util:get_field_string(MaxCol ,length(Rows))].
+	{MaxColumn,MaxLine} = lists:foldl(
+		  fun([LineId|Row],{MaxCol,MaxLine})->
+			MC = if length(Row)> MaxCol-> length(Row);
+				true-> MaxCol
+			end,
+			ML = if LineId> MaxLine-> LineId;
+					 true-> MaxLine
+				 end,
+			{MC,ML}
+		end,{0,0},Rows),
+	["A1:" , xlsx_util:get_field_string(MaxColumn ,MaxLine)].
 
 put_context(XlsxHandle,Context)->
 	put({xlsx_write_context,XlsxHandle},Context).
@@ -93,7 +104,7 @@ do_sheets(Sheets)->
 					"<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
 					, Dimension
 					,"<sheetData>" ,
-					lists:map(fun({RIdx,Row})->encode_row(RIdx, Row) end, lists:zip(lists:seq(1, length(Rows)), Rows)) ,
+					lists:map(fun({RIdx,Row})->encode_row(RIdx, Row) end, Rows),
 					"</sheetData></worksheet>"]
 			}
 		end, lists:zip(lists:seq(1, length(Sheets)), Sheets)).
