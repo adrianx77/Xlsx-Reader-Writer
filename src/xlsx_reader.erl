@@ -9,7 +9,6 @@
 -module(xlsx_reader).
 -author("Adrianx Lau <adrianx.lau@gmail.com>").
 -include_lib("xmerl/include/xmerl.hrl").
--include("xlsxio.hrl").
 
 %% API
 -export([read/2]).
