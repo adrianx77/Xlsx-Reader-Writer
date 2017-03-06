@@ -44,13 +44,12 @@ xmlElement_from_name(Name,XmlNode)->
 
 
 get_column_count(DimString) ->
-	[BeginStr, EndStr] = case string:tokens(DimString, ":") of
+	[_BeginStr, EndStr] = case string:tokens(DimString, ":") of
 							 [BeginString, EndString] -> [BeginString, EndString];
 							 [BeginString] -> [BeginString, BeginString]
 						 end,
-	[Begin] = string:tokens(BeginStr, "0123456789"),
 	[End] = string:tokens(EndStr, "0123456789"),
-	field_to_num(End) - field_to_num(Begin) + 1.
+	field_to_num(End).
 
 
 -define(APHALIC_LENGTH, ($Z - $A + 1) ).
@@ -63,24 +62,25 @@ do_get_column_string(Column)when Column < ?APHALIC_LENGTH  ->
 do_get_column_string(Column)->
 	[ $A  + Column rem ?APHALIC_LENGTH  | do_get_column_string(( Column div ?APHALIC_LENGTH) -1)].
 
-int_pow(_X, 0) ->
+int_pow(_Base, 0) ->
 	1;
-int_pow(X, N) when N > 0 ->
-	int_pow(X, N, 1).
+int_pow(Base, Exp) when Exp> 0 ->
+	int_pow(Base, Exp, 1).
 
 
-int_pow(X, N, R) when N < 2 ->
-	R * X;
-int_pow(X, N, R) ->
-	int_pow(X * X, N bsr 1, case N band 1 of 1 -> R * X; 0 -> R end).
+int_pow(Base, Exp, R) when Exp < 2 ->
+	R * Base;
+int_pow(Base, Exp, R) ->
+	int_pow(Base * Base, Exp bsr 1, case Exp band 1 of 1 -> R * Base; 0 -> R end).
 
 field_to_num(NumStr) ->
 	{_, Num} = lists:foldr(
 		fun(C, {I, N}) ->
-			New = (C - $A + 1) * int_pow( I,$Z - $A + 1) + N,
+			New = (C - $A + 1) * int_pow( $Z - $A + 1,I) + N,
 			{I + 1, New}
 		end, {0, 0}, NumStr),
 	Num.
+
 get_field_number(FieldString)->
 	[FieldName] = string:tokens(FieldString, "0123456789"),
 	PostNumString = string:right(FieldString, length(FieldString) - length(FieldName)),
@@ -103,11 +103,11 @@ get_field_string(Column,Row)->
 
 take_nth_list(N, List, Value)->
 	{NewList, _Acc} = lists:mapfoldl(
-		fun(I, Index)->
+		fun(Item, Index)->
 			if Index =:= N->
-				{Value, Index + 1};
+					{Value, Index + 1};
 				true->
-					{I, Index + 1}
+					{Item, Index + 1}
 			end
 		end, 1, List),
 	NewList.

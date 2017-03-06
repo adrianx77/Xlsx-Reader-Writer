@@ -40,7 +40,7 @@ test()->
             (SheetName, [Line | Row]) ->
                 io:format("~n~ts=====>~p | ", [SheetName, Line]),
                 lists:foreach(fun(R)-> io:format("\t~ts",[R]) end,Row),
-            next_sheet
+                next_row
         end,
 
     case xlsx_reader:read(XlsxFile,RowHandler) of
