@@ -72,22 +72,22 @@ process_relationhips(ZipHandle) ->
 	end.
 process_sheet_table(XlsxZipHandle, RowHandler) ->
 	lists:foldl(
-		fun (_SheetInfo,break) ->
-			break;
-			(SheetInfo,next_sheet) ->
-			SheetId = SheetInfo#xlsx_sheet.id,
-			SheetName = SheetInfo#xlsx_sheet.name,
-			Relation = get_xlsx_relation(SheetId),
-			TargetFile = "xl/" ++ Relation#xlsx_relation.target,
-			case zip:zip_get(TargetFile, XlsxZipHandle) of
-				{error, Reason} -> xlsx_util:sprintf("zip:zip_get ~p error:~p", [TargetFile, Reason]);
-				{ok, {_FileName, SheetBinary}} ->
-					process_sheet(SheetBinary, SheetName,RowHandler)
-			end
-		end, next_sheet ,get_xlsx_sheets()).
+		fun (_SheetInfo,{break,Context}) ->
+				{break,Context};
+			(SheetInfo,{next_sheet,Context}) ->
+				SheetId = SheetInfo#xlsx_sheet.id,
+				SheetName = SheetInfo#xlsx_sheet.name,
+				Relation = get_xlsx_relation(SheetId),
+				TargetFile = "xl/" ++ Relation#xlsx_relation.target,
+				case zip:zip_get(TargetFile, XlsxZipHandle) of
+					{error, Reason} -> xlsx_util:sprintf("zip:zip_get ~p error:~p", [TargetFile, Reason]);
+					{ok, {_FileName, SheetBinary}} ->
+						process_sheet(SheetBinary, SheetName,RowHandler,Context)
+				end
+		end, {next_sheet,undefined},get_xlsx_sheets()).
 
 
-process_sheet(SheetBinary, SheetName ,RowHandler) ->
+process_sheet(SheetBinary, SheetName ,RowHandler,InputContext) ->
 	case xmerl_scan:string(binary_to_list(SheetBinary)) of
 		{ParsedDocRootEl, _Rest} ->
 			XMLS = ParsedDocRootEl#xmlElement.content,
@@ -104,19 +104,20 @@ process_sheet(SheetBinary, SheetName ,RowHandler) ->
 
 			DefData = lists:duplicate(ColumnCount + 1, ""),
 			RHRes = lists:foldl(
-				fun(_XmlRow, next_sheet) ->
-					next_sheet;
-					(_XmlRow, break) ->
-						break;
-					(XmlRow, next_row) ->
+				fun(_XmlRow, {next_sheet,Context}) ->
+					{next_sheet,Context};
+					(_XmlRow, {break,Context}) ->
+						{break,Context};
+					(XmlRow, {next_row,Context}) ->
 						case get_row(XmlRow, DefData) of
-							[] -> next_row;
+							[] -> {next_row,Context};
 							NewData ->
-								RowHandler(SheetName, NewData)
+								RowHandler(SheetName, NewData ,Context)
 						end
-				end, next_row, XmlRows),
-			if RHRes == next_row -> next_sheet;
-				true -> RHRes
+				end, {next_row,InputContext}, XmlRows),
+			case RHRes of
+				{next_row,OutContext}-> {next_sheet,OutContext};
+				_-> RHRes
 			end;
 		ExceptResult ->
 			ErrorString = xlsx_util:sprintf("xmerl_scan:string error:~p", ExceptResult),
@@ -287,7 +288,13 @@ get_cell_info(XmlCell) ->
 						NewCellValue = list_to_integer(get_subnode_text('v',XmlCell)),
 						get_xlsx_share_string(NewCellValue);
 					false ->
-						get_subnode_text('v',XmlCell)
+						case xlsx_util:has_attribute_value( 't', "b",XmlCell) of
+							true-> case list_to_integer(get_subnode_text('v',XmlCell)) of
+									   1-> "TRUE";
+									   _-> "FALSE"
+								   end;
+							false->get_subnode_text('v',XmlCell)
+						end
 				end,
 	{CellName, CellValue}.
 
