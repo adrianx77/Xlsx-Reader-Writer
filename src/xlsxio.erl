@@ -32,17 +32,17 @@ test2()->
 test()->
     XlsxFile = "xlsx/t.xlsx",
     RowHandler =
-        fun(SheetName, [1 | Row]) ->
+        fun(SheetName, [1 | Row],Context) ->
             io:format("~n~ts=====>~p | ", [SheetName, 1]),
             lists:foreach(fun(R)-> io:format("\t~ts",[R]) end,Row),
-            next_row;
-            (SheetName, [Line | Row]) ->
+            {next_row,Context};
+            (SheetName, [Line | Row],Context) ->
                 io:format("~n~ts=====>~p | ", [SheetName, Line]),
                 lists:foreach(fun(R)-> io:format("\t~ts",[R]) end,Row),
-                next_row
+                {next_row,Context}
         end,
-
-    case xlsx_reader:read(XlsxFile,RowHandler) of
+    InputContext = input,
+    case xlsx_reader:read(XlsxFile,InputContext,RowHandler) of
         {error,Reason}-> io:format("read error:~p~n",[Reason]);
         ok-> io:format("~n")
     end.

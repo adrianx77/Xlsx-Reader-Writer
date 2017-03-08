@@ -11,33 +11,33 @@
 -include_lib("xmerl/include/xmerl.hrl").
 
 %% API
--export([read/2]).
+-export([read/3]).
 
 -record(xlsx_sheet, {id, name}).
 -record(xlsx_share, {id, string}).
 -record(xlsx_relation, {id, target, type}).
 
--spec(read(XlsxFile :: string(), RowHandler :: atom() | function()) ->
+-spec(read(XlsxFile :: string(),InputContext::term(), RowHandler :: atom() | function()) ->
 	{error, Resaon :: atom()} | {error, Resaon :: string()} |
 	{ok}).
 
-read(XlsxFile, RowHandler) ->
+read(XlsxFile,InputContext, RowHandler) ->
 	case zip:zip_open(XlsxFile, [memory]) of
 		{error, Reason} -> {error, Reason};
 		{ok, ZipHandle} ->
-			Result= read_memory(ZipHandle, RowHandler),
+			Result= read_memory(ZipHandle,InputContext, RowHandler),
 			clear_xlsx_context(),
 			zip:zip_close(ZipHandle),
 			Result
 	end.
 
-read_memory(XlsxZipHandle, RowHandler) ->
+read_memory(XlsxZipHandle, InputContext,RowHandler) ->
 	try
 		process_sheetinfos(XlsxZipHandle),
 		process_sharestring(XlsxZipHandle),
 		process_relationhips(XlsxZipHandle),
-		process_sheet_table(XlsxZipHandle, RowHandler),
-			ok
+		{_,OutContext} = process_sheet_table(XlsxZipHandle,InputContext, RowHandler),
+		OutContext
 	catch
 		error:Reason -> {error, Reason}
 	end.
@@ -70,7 +70,7 @@ process_relationhips(ZipHandle) ->
 					error(ErrorString)
 			end
 	end.
-process_sheet_table(XlsxZipHandle, RowHandler) ->
+process_sheet_table(XlsxZipHandle,InputContext, RowHandler) ->
 	lists:foldl(
 		fun (_SheetInfo,{break,Context}) ->
 				{break,Context};
@@ -80,11 +80,11 @@ process_sheet_table(XlsxZipHandle, RowHandler) ->
 				Relation = get_xlsx_relation(SheetId),
 				TargetFile = "xl/" ++ Relation#xlsx_relation.target,
 				case zip:zip_get(TargetFile, XlsxZipHandle) of
-					{error, Reason} -> xlsx_util:sprintf("zip:zip_get ~p error:~p", [TargetFile, Reason]);
+					{error, Reason} -> ErrorString = xlsx_util:sprintf("zip:zip_get ~p error:~p", [TargetFile, Reason]),error(ErrorString);
 					{ok, {_FileName, SheetBinary}} ->
 						process_sheet(SheetBinary, SheetName,RowHandler,Context)
 				end
-		end, {next_sheet,undefined},get_xlsx_sheets()).
+		end, {next_sheet,InputContext},get_xlsx_sheets()).
 
 
 process_sheet(SheetBinary, SheetName ,RowHandler,InputContext) ->
