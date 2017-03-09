@@ -46,8 +46,7 @@ process_sharestring(ZipHandle) ->
 	ShareStringFile = "xl/sharedStrings.xml",
 	case zip:zip_get(ShareStringFile, ZipHandle) of
 		{error, Reason} ->
-			ErrorString = xlsx_util:sprintf("zip:zip_get ~p error:~p", [ShareStringFile, Reason]),
-			error(ErrorString);
+			ErrorString = xlsx_util:sprintf("zip:zip_get ~p error:~p", [ShareStringFile, Reason]);
 		{ok, ShareStrings} ->
 			{_File, Binary} = ShareStrings,
 			do_put_shareString(Binary)
